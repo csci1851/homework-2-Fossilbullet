@@ -165,6 +165,7 @@ class GradientBoostingModel:
 
         # TODO: Compute metrics (classification vs regression)
         prediction = self.predict(X_test)
+        probabilities = self.predict(X_test, return_proba=True)
         print(f"Prediction is {prediction}")
         if self.task == "classification":
             metrics = {
@@ -172,7 +173,9 @@ class GradientBoostingModel:
                 "precision": precision_score(y_test, prediction, average="macro"),
                 "recall": recall_score(y_test, prediction, average="macro"),
                 "f1": f1_score(y_test, prediction, average="macro"),
-                "roc_auc": roc_auc_score(y_test, prediction, average="macro"),
+                "roc_auc": roc_auc_score(y_test, probabilities[:, 1], average="macro", multi_class="ovo"),
+                "prediction": prediction,
+                "probabilities": probabilities
             }
         else:
             metrics = {"rmse": mean_squared_error(y_test, prediction), "mae": mean_absolute_error(y_test, prediction), "r2": r2_score(y_test, prediction)}
@@ -210,7 +213,7 @@ class GradientBoostingModel:
 
         # TODO: Choose scoring metrics based on classification vs regression
         if self.task == "classification":
-            scoring = ["accuracy", "precision", "recall", "f1", "roc_auc"]
+            scoring = ["accuracy", "precision_macro", "recall_macro", "f1_macro", "roc_auc_ovo"]
         else:
             scoring = ["neg_mean_squared_error", "neg_mean_absolute_error", "r2"]
         
@@ -218,7 +221,7 @@ class GradientBoostingModel:
         # TODO: Get mean, stdev of cross_val_score for each metric
         
         for scoringtype in scoring:
-            cvscores = cross_val_score(model, X, y, scoring=scoringtype, cv=cv)
+            cvscores = cross_val_score(model, X, y, scoring=scoringtype, cv=cv, error_score="raise")
             results[scoringtype + " Mean"] = np.mean(cvscores)
             results[scoringtype + " Std"] = np.std(cvscores)
         
@@ -238,7 +241,7 @@ class GradientBoostingModel:
         # TODO: Optionally plot a bar chart of top_n feature importances
         if not plot:
             #print(f"Feature Importances: {featureimportances}")
-            return pd.DataFrame(featureimportances)
+            return self.model.feature_importances_
         else:
             zippedArrs = zip(self.feature_names, featureimportances)
             topfeatureimportances = sorted(zippedArrs, key=lambda x: -x[1])
@@ -249,7 +252,7 @@ class GradientBoostingModel:
             plt.ylabel("Importance")
             plt.show()
             
-            return pd.DataFrame(featureimportances)
+            return self.model.feature_importances_
 
     def tune_hyperparameters(
         self,
@@ -281,7 +284,7 @@ class GradientBoostingModel:
         # TODO: Perform grid search for hyperparameter tuning
         
         grid_search.fit(X, y)
-        results = {"best_params": grid_search.best_params_, "best_score": grid_search.best_score_}
+        results = {"best_params": grid_search.best_params_, "best_score": grid_search.best_score_, "all_results": grid_search.cv_results_}
         return results
 
     def plot_tree(
